@@ -1,41 +1,99 @@
-# English | [中文](README_cn.md)
+<!--
+  SPDX-FileCopyrightText: 2026 LimX Dynamics Technology Co., Ltd.
+  SPDX-License-Identifier: Apache-2.0
+-->
+
+<p align="center">
+  <img src="doc/banner.png" alt="TRON2_YG_LAB: RL locomotion for TRON2A with arm and gripper" width="100%" />
+</p>
+
+<p align="center">
+  <a href="README.md">English</a> | <a href="README_cn.md">中文</a>
+</p>
+
+<p align="center">
+  <a href="LICENCE"><img src="https://img.shields.io/badge/license-Apache--2.0-2f6feb" alt="License: Apache-2.0" /></a>
+  <img src="https://img.shields.io/badge/python-3.10-2f6feb" alt="Python 3.10" />
+  <img src="https://img.shields.io/badge/Isaac%20Sim-4.5.0-2f6feb" alt="Isaac Sim 4.5.0" />
+  <img src="https://img.shields.io/badge/Isaac%20Lab-RL-2f6feb" alt="Isaac Lab" />
+</p>
 
 # TRON2_YG_LAB
 
-Reinforcement learning training stack for the LimX **TRON2A** bipedal robot, built on [Isaac Lab](https://isaac-sim.github.io/IsaacLab/) and using PPO to train locomotion policies. Supports two base morphologies: **SF** (sole-foot) and **WF** (wheel-foot), as well as the SFYG and WFYG variants with 6-DoF arms + two-finger grippers (arms are locked during runtime and do not participate in RL).
+Reinforcement learning training stack for the LimX **TRON2A** biped, built on [Isaac Lab](https://isaac-sim.github.io/IsaacLab/) with PPO. It trains blind locomotion policies for the **SF** (sole-foot) and **WF** (wheel-foot) bases, and for the **SFYG / WFYG** variants that carry a 6-DoF arm and a two-finger gripper. Built for the ATEC challenge.
 
-## Repository Structure
+> **Scope:** blind (no perception) velocity tracking on flat and rough terrain (no stairs). In the YG variants the arm and gripper are locked and carried as payload; they are not controlled by the policy. Trained policies are not included: you train them here and export TorchScript / ONNX.
+
+## Highlights
+
+- **Four robots, one stack.** SF, WF, SFYG and WFYG each register a Flat and a Rough training task plus matching `-Play-v0` tasks (16 task IDs).
+- **Arm as payload.** In SFYG / WFYG a dedicated PD group holds the arm and gripper in a fixed pose, so the policy learns to walk with the extra mass without the arm entering the action or observation space.
+- **Rough terrain with curriculum.** Procedural flat / waves / boxes / random-rough terrain on a 10×16 grid, difficulty 0→1.
+- **Velocity estimator built in.** An MLP encoder reads 10 steps of observation history and estimates base velocity for the actor.
+- **Deployment-ready export.** `play.py` writes TorchScript and ONNX files for the policy and the encoder into `exported/` next to the checkpoint.
+
+## Model lineup
+
+| | Model | Description | Task ID prefix |
+|:---:|---|---|---|
+| <img src="doc/model_sf.png" alt="SF_TRON2A" width="260" /> | **SF_TRON2A** | Biped with sole feet (ankle pitch). | `Isaac-Limx-SF-TRON2A-...` |
+| <img src="doc/model_wf.png" alt="WF_TRON2A" width="260" /> | **WF_TRON2A** | Biped with wheel feet. | `Isaac-Limx-WF-TRON2A-...` |
+| <img src="doc/model_sfyg.png" alt="SFYG_TRON2A" width="260" /> | **SFYG_TRON2A** | Sole-foot base + 6-DoF arm + two-finger gripper (locked). | `Isaac-Limx-SFYG-TRON2A-...` |
+| <img src="doc/model_wfyg.png" alt="WFYG_TRON2A" width="260" /> | **WFYG_TRON2A** | Wheel-foot base + 6-DoF arm + two-finger gripper (locked). | `Isaac-Limx-WFYG-TRON2A-...` |
+
+Images are rendered in MuJoCo from the bundled `robot_description` models in the initial pose used for training (arm at zero, gripper fully open).
+
+## Quick start
+
+**Look at the robots** (no Isaac Sim needed):
+
+```bash
+git clone --recurse-submodules https://github.com/limxdynamics/TRON2_YG_LAB.git
+cd TRON2_YG_LAB
+pip install mujoco
+python -m mujoco.viewer --mjcf=robot_description/tron2/SFYG_TRON2A/xml/robot.xml
+```
+
+Swap `SFYG_TRON2A` for `SF_TRON2A`, `WF_TRON2A` or `WFYG_TRON2A`.
+
+**Train a policy** (Isaac Sim 4.5.0 + Isaac Lab installed, see [Installation](#installation)):
+
+```bash
+python scripts/rsl_rl/train.py --task Isaac-Limx-SFYG-TRON2A-Blind-Rough-v0 --num_envs 4096 --headless
+```
+
+## Repository structure
 
 ```
 .
-├── exts/bipedal_locomotion/   # Isaac Lab extension: env/asset/MDP/robot cfg
-├── rsl_rl/                    # Vendored rsl_rl fork (PPO + on-policy runner)
-├── scripts/rsl_rl/            # Training/play entry points (train.py / play.py / cli_args.py)
-├── robot_description/         # Git submodule — URDF/USD/STL robot description assets
-└── docs/superpowers/          # Design documents + implementation plans
+├── exts/bipedal_locomotion/   # Isaac Lab extension: env / asset / MDP / robot configs
+├── rsl_rl/                    # Vendored rsl_rl fork (PPO + on-policy runner + MLP encoder)
+├── scripts/rsl_rl/            # Entry points: train.py / play.py / cli_args.py
+├── robot_description/         # Git submodule: URDF / USD / MJCF / meshes for TRON2
+└── doc/                       # README images
 ```
 
 ## Requirements
 
 - Isaac Sim **4.5.0** + Isaac Lab, with `isaaclab` / `isaaclab_tasks` / `isaaclab_rl` importable
 - Python 3.10
-- GPU (≥ 12 GB VRAM recommended for 4096-env training)
+- NVIDIA GPU (≥ 12 GB VRAM recommended for 4096-environment training)
 
 ## Installation
 
 ```bash
-# 1. Clone the repository with submodules
+# 1. Clone with submodules
 git clone --recurse-submodules https://github.com/limxdynamics/TRON2_YG_LAB.git
 cd TRON2_YG_LAB
-# If already cloned without submodules:
+# Already cloned without submodules:
 git submodule update --init --recursive
 
-# 2. Editable install of the extension and vendored rsl_rl
+# 2. Editable install of the extension and the vendored rsl_rl
 pip install -e exts/bipedal_locomotion
 pip install -e rsl_rl
 ```
 
-The USD assets under the `robot_description` submodule are loaded at training/play startup and must be present; otherwise spawn will fail.
+The USD files in the `robot_description` submodule are loaded when training or play starts; without them, spawning the robot fails.
 
 ## Training
 
@@ -100,7 +158,7 @@ Notes:
 2. Resume creates a **new timestamped subdirectory** under `logs/rsl_rl/<experiment_name>/` for new logs, leaving the original run files untouched.
 3. To train for N additional iterations: `--max_iterations` is a **cap, not an increment** — if you trained to 1500 and want 1000 more, pass `--max_iterations 2500`.
 
-## Play / Deployment Preview
+## Play and export
 
 Use task IDs with the `-Play-v0` suffix. Play cfg uses fewer envs, disables domain randomization, and simplifies terrain.
 
@@ -120,7 +178,9 @@ python scripts/rsl_rl/play.py \
 
 Every training task has a corresponding `-Play-v0` variant: SF/WF/SFYG/WFYG × Flat/Rough = 8 total.
 
-## Robot Morphologies
+`play.py` also exports the loaded checkpoint to `exported/` next to it: TorchScript and ONNX (`policy.onnx`, `encoder.onnx`) for deployment.
+
+## Robot morphologies
 
 | Morphology | End-effector | Arms | Task ID Prefix |
 |---|---|---|---|
@@ -139,9 +199,9 @@ The arms remain locked in a fixed pose throughout (arm1~6 = 0 rad, gripper1/2 = 
 
 For the full arm exclusion checklist, see [exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/limx_solefoot_yg_tron2a_env_cfg.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/limx_solefoot_yg_tron2a_env_cfg.py) and [limx_wheelfoot_yg_tron2a_env_cfg.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/limx_wheelfoot_yg_tron2a_env_cfg.py).
 
-## Architecture Overview
+## Architecture
 
-See [CLAUDE.md](CLAUDE.md) for details. Three top-level packages:
+Three top-level packages:
 
 1. **`exts/bipedal_locomotion/`** — Isaac Lab extension. All env/asset/MDP/robot configs live here.
 2. **`rsl_rl/`** — Vendored fork. `scripts/rsl_rl/train.py` prepends this path to `sys.path`, overriding the system-installed version. Import uses `from rsl_rl.runner import OnPolicyRunner` (singular `runner`, not upstream's `runners`).
@@ -161,21 +221,19 @@ To add a new robot variant: increment one copy at each of the 5 layers above wit
 
 ## Submodule: robot_description
 
-URL: [https://github.com/limx-tron2/robot-description](https://github.com/limx-tron2/robot-description)
+The robot models come from [tron2-robot-description](https://github.com/limxdynamics/tron2-robot-description) (URDF / xacro / MuJoCo XML / meshes / USD for the TRON2 variants). This repository pins it at commit `8a11c12`, where the models live under `tron2/<MODEL>/`.
 
-Contains URDF / xacro / MuJoCo XML / mesh / USD assets for 6 TRON2 variants: `SF_TRON2A` / `WF_TRON2A` / `SFYG_TRON2A` / `WFYG_TRON2A` / `DA_TRON2A` / `DACH_TRON2A` (the last two are not used by this repository).
+> **Do not update the submodule to the latest `main`.** Later versions of tron2-robot-description moved the models to `tron2a/<MODEL>/`, so the asset configs in `exts/bipedal_locomotion/bipedal_locomotion/assets/config/` would no longer find the USD files. Update the submodule only together with those paths.
 
-Update to the latest submodule commit:
+## Related repositories
 
-```bash
-cd robot_description && git pull origin main && cd ..
-git add robot_description && git commit -m "chore: bump robot_description submodule"
-```
-
-## Testing / Linting
-
-No test suite is configured. `pyproject.toml` contains `isort` + `pyright` configuration but no CI.
+| Repository | Description |
+|---|---|
+| [tron2-robot-description](https://github.com/limxdynamics/tron2-robot-description) | TRON2 robot models (URDF / MJCF / USD) |
+| [tron2_rl_lab](https://github.com/limxdynamics/tron2_rl_lab) | Isaac Lab RL for SF / WF and the full-body dual-arm DASF_TRON2A |
+| [tron2_mujoco_sim](https://github.com/limxdynamics/tron2_mujoco_sim) | MuJoCo simulator for sim-to-sim checks |
+| [tron2_rl_deploy_python](https://github.com/limxdynamics/tron2_rl_deploy_python) · [tron2_rl_deploy_ros](https://github.com/limxdynamics/tron2_rl_deploy_ros) | Policy deployment in Python / ROS |
 
 ## License
 
-[Apache 2.0](LICENCE).
+[Apache 2.0](LICENCE). If this project helps your work, a ⭐ helps others find it.

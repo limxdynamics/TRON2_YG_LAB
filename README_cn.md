@@ -1,41 +1,99 @@
-# 中文 | [English](README.md)
+<!--
+  SPDX-FileCopyrightText: 2026 LimX Dynamics Technology Co., Ltd.
+  SPDX-License-Identifier: Apache-2.0
+-->
+
+<p align="center">
+  <img src="doc/banner.png" alt="TRON2_YG_LAB：带机械臂和夹爪的 TRON2A 强化学习运动控制" width="100%" />
+</p>
+
+<p align="center">
+  <a href="README.md">English</a> | <a href="README_cn.md">中文</a>
+</p>
+
+<p align="center">
+  <a href="LICENCE"><img src="https://img.shields.io/badge/license-Apache--2.0-2f6feb" alt="License: Apache-2.0" /></a>
+  <img src="https://img.shields.io/badge/python-3.10-2f6feb" alt="Python 3.10" />
+  <img src="https://img.shields.io/badge/Isaac%20Sim-4.5.0-2f6feb" alt="Isaac Sim 4.5.0" />
+  <img src="https://img.shields.io/badge/Isaac%20Lab-RL-2f6feb" alt="Isaac Lab" />
+</p>
 
 # TRON2_YG_LAB
 
-基于 [Isaac Lab](https://isaac-sim.github.io/IsaacLab/) 的 LimX **TRON2A** 双足机器人强化学习训练栈，使用 PPO 训练 locomotion 策略。支持 SF / WF 两种基础形态（sole-foot / wheel-foot），以及带 6-DoF 机械臂 + 双指 gripper 的 SFYG / WFYG 形态（机械臂运行时锁死、不参与 RL）。
+基于 [Isaac Lab](https://isaac-sim.github.io/IsaacLab/) 的 LimX **TRON2A** 双足机器人强化学习训练栈，使用 PPO 训练盲走（无感知）运动策略。支持 **SF**（足板）和 **WF**（轮足）两种底座，以及带 6 自由度机械臂和双指夹爪的 **SFYG / WFYG** 形态。为 ATEC 挑战赛开发。
+
+> **适用范围：** 平地和起伏地形（不含楼梯）上的速度跟踪，不使用感知。YG 形态中机械臂和夹爪锁定，作为负载携带，不由策略控制。仓库不附带训练好的策略：在这里训练，再导出 TorchScript / ONNX 用于部署。
+
+## 亮点
+
+- **一套代码，四种机型。** SF、WF、SFYG、WFYG 各自注册 Flat 和 Rough 训练任务以及对应的 `-Play-v0` 任务，共 16 个任务 ID。
+- **机械臂作为负载。** SFYG / WFYG 中，机械臂和夹爪由单独的 PD 组锁定在固定姿态，策略学会带着额外重量行走，机械臂不进入动作空间和观测。
+- **带课程的起伏地形。** 程序生成 flat / waves / boxes / random_rough 四类子地形，10×16 网格，难度 0→1。
+- **内置速度估计器。** MLP 编码器读取最近 10 步观测历史，为 actor 估计机身速度。
+- **可直接部署的导出。** `play.py` 会把策略和编码器的 TorchScript、ONNX 文件导出到 checkpoint 旁边的 `exported/` 目录。
+
+## 机型一览
+
+| | 机型 | 说明 | 任务 ID 前缀 |
+|:---:|---|---|---|
+| <img src="doc/model_sf.png" alt="SF_TRON2A" width="260" /> | **SF_TRON2A** | 足板双足（带踝关节俯仰）。 | `Isaac-Limx-SF-TRON2A-...` |
+| <img src="doc/model_wf.png" alt="WF_TRON2A" width="260" /> | **WF_TRON2A** | 轮足双足。 | `Isaac-Limx-WF-TRON2A-...` |
+| <img src="doc/model_sfyg.png" alt="SFYG_TRON2A" width="260" /> | **SFYG_TRON2A** | 足板底座 + 6 自由度机械臂 + 双指夹爪（锁定）。 | `Isaac-Limx-SFYG-TRON2A-...` |
+| <img src="doc/model_wfyg.png" alt="WFYG_TRON2A" width="260" /> | **WFYG_TRON2A** | 轮足底座 + 6 自由度机械臂 + 双指夹爪（锁定）。 | `Isaac-Limx-WFYG-TRON2A-...` |
+
+图片由 `robot_description` 中的模型在 MuJoCo 里渲染，采用训练时的初始姿态（机械臂零位、夹爪全开）。
+
+## 快速开始
+
+**先看看机器人**（不需要 Isaac Sim）：
+
+```bash
+git clone --recurse-submodules https://github.com/limxdynamics/TRON2_YG_LAB.git
+cd TRON2_YG_LAB
+pip install mujoco
+python -m mujoco.viewer --mjcf=robot_description/tron2/SFYG_TRON2A/xml/robot.xml
+```
+
+把 `SFYG_TRON2A` 换成 `SF_TRON2A`、`WF_TRON2A` 或 `WFYG_TRON2A` 即可查看其他机型。
+
+**训练策略**（已安装 Isaac Sim 4.5.0 + Isaac Lab，见[安装](#安装)）：
+
+```bash
+python scripts/rsl_rl/train.py --task Isaac-Limx-SFYG-TRON2A-Blind-Rough-v0 --num_envs 4096 --headless
+```
 
 ## 仓库结构
 
 ```
 .
-├── exts/bipedal_locomotion/   # Isaac Lab extension：env/asset/MDP/robot cfg
-├── rsl_rl/                    # 项目内 vendored 的 rsl_rl fork（PPO + on-policy runner）
-├── scripts/rsl_rl/            # 训练 / play 入口（train.py / play.py / cli_args.py）
-├── robot_description/         # git submodule — URDF/USD/STL 等机器人描述
-└── docs/superpowers/          # 设计文档 + 实施计划
+├── exts/bipedal_locomotion/   # Isaac Lab extension：env / asset / MDP / robot 配置
+├── rsl_rl/                    # 项目内 vendored 的 rsl_rl fork（PPO + on-policy runner + MLP 编码器）
+├── scripts/rsl_rl/            # 入口：train.py / play.py / cli_args.py
+├── robot_description/         # git 子模块：TRON2 的 URDF / USD / MJCF / 网格
+└── doc/                       # README 图片
 ```
 
 ## 环境要求
 
 - Isaac Sim **4.5.0** + Isaac Lab，且 `isaaclab` / `isaaclab_tasks` / `isaaclab_rl` 可被 import
 - Python 3.10
-- GPU（推荐 ≥ 12 GB 显存，4096 envs 训练）
+- NVIDIA 显卡（4096 个环境并行训练建议 ≥ 12 GB 显存）
 
 ## 安装
 
 ```bash
-# 1. clone 仓库连同子模块
+# 1. 连同子模块一起 clone
 git clone --recurse-submodules https://github.com/limxdynamics/TRON2_YG_LAB.git
 cd TRON2_YG_LAB
-# 如果已 clone 但未拉子模块：
+# 如果 clone 时没有拉子模块：
 git submodule update --init --recursive
 
-# 2. editable install extension 与 vendored rsl_rl
+# 2. 以可编辑模式安装 extension 和 vendored 的 rsl_rl
 pip install -e exts/bipedal_locomotion
 pip install -e rsl_rl
 ```
 
-`robot_description` 子模块下的 USD 在训练 / play 启动时被直接加载，必须存在；否则 spawn 失败。
+训练和 play 启动时会加载 `robot_description` 子模块里的 USD 文件，缺少的话机器人无法生成。
 
 ## 训练
 
@@ -100,7 +158,7 @@ python scripts/rsl_rl/train.py \
 2. resume 会在 `logs/rsl_rl/<experiment_name>/` 下**新建一个 timestamp 子目录**写新 log，不覆盖原 run 文件。
 3. 想再训 N 个 iter：`--max_iterations` 是**上限不是增量**——原来训到 1500、想再训 1000，传 `--max_iterations 2500`。
 
-## Play / 部署预演
+## Play 与导出
 
 用 `-Play-v0` 后缀的任务 ID。Play cfg 使用更少 env、关闭域随机化、简化地形。
 
@@ -119,6 +177,8 @@ python scripts/rsl_rl/play.py \
 ```
 
 每个训练 task 都有同名的 `-Play-v0` 变体，SF/WF/SFYG/WFYG × Flat/Rough 共 8 个。
+
+`play.py` 还会把加载的 checkpoint 导出到其旁边的 `exported/` 目录：TorchScript 和 ONNX（`policy.onnx`、`encoder.onnx`），用于部署。
 
 ## 机器人形态
 
@@ -139,9 +199,9 @@ python scripts/rsl_rl/play.py \
 
 机械臂排除清单的具体覆盖见 [exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/limx_solefoot_yg_tron2a_env_cfg.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/limx_solefoot_yg_tron2a_env_cfg.py) 与 [limx_wheelfoot_yg_tron2a_env_cfg.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/limx_wheelfoot_yg_tron2a_env_cfg.py)。
 
-## 架构概览
+## 架构
 
-详见 [CLAUDE.md](CLAUDE.md)。三个顶层包：
+三个顶层包：
 
 1. **`exts/bipedal_locomotion/`** — Isaac Lab extension。env / asset / MDP / robot cfg 全部在这里
 2. **`rsl_rl/`** — vendored fork。`scripts/rsl_rl/train.py` 在 `sys.path` 最前面插入此路径，覆盖系统装的版本；import 是 `from rsl_rl.runner import OnPolicyRunner`（单数 `runner`，不是 upstream 的 `runners`）
@@ -161,21 +221,19 @@ python scripts/rsl_rl/play.py \
 
 ## 子模块：robot_description
 
-URL：[https://github.com/limx-tron2/robot-description](https://github.com/limx-tron2/robot-description)
+机器人模型来自 [tron2-robot-description](https://github.com/limxdynamics/tron2-robot-description)（TRON2 各形态的 URDF / xacro / MuJoCo XML / 网格 / USD）。本仓库将它固定在提交 `8a11c12`，该版本的模型位于 `tron2/<机型>/`。
 
-包含 6 种 TRON2 变体的 URDF / xacro / MuJoCo XML / mesh / USD：`SF_TRON2A` / `WF_TRON2A` / `SFYG_TRON2A` / `WFYG_TRON2A` / `DA_TRON2A` / `DACH_TRON2A`（后两种本仓库未使用）。
+> **不要把子模块更新到最新的 `main`。** tron2-robot-description 后续版本把模型目录改成了 `tron2a/<机型>/`，`exts/bipedal_locomotion/bipedal_locomotion/assets/config/` 里的资源配置会找不到 USD 文件。如需更新子模块，要同时修改这些路径。
 
-更新到子模块最新 commit：
+## 相关仓库
 
-```bash
-cd robot_description && git pull origin main && cd ..
-git add robot_description && git commit -m "chore: bump robot_description submodule"
-```
-
-## 测试 / Lint
-
-仓库未配置 test suite。`pyproject.toml` 含 `isort` + `pyright` 配置但没有 CI。
+| 仓库 | 说明 |
+|---|---|
+| [tron2-robot-description](https://github.com/limxdynamics/tron2-robot-description) | TRON2 机器人模型（URDF / MJCF / USD） |
+| [tron2_rl_lab](https://github.com/limxdynamics/tron2_rl_lab) | 基于 Isaac Lab 的 SF / WF 及全身双臂 DASF_TRON2A 训练 |
+| [tron2_mujoco_sim](https://github.com/limxdynamics/tron2_mujoco_sim) | MuJoCo 仿真，用于 sim-to-sim 验证 |
+| [tron2_rl_deploy_python](https://github.com/limxdynamics/tron2_rl_deploy_python) · [tron2_rl_deploy_ros](https://github.com/limxdynamics/tron2_rl_deploy_ros) | Python / ROS 策略部署 |
 
 ## License
 
-[Apache 2.0](LICENCE)。
+[Apache 2.0](LICENCE)。如果这个项目对你有帮助，欢迎点个 ⭐，让更多人看到它。
