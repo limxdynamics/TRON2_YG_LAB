@@ -191,6 +191,10 @@ python scripts/rsl_rl/play.py \
 
 ### YG 变体设计
 
+<p align="center">
+  <img src="doc/yg_design_zh.png" alt="SFYG 与 WFYG：腿部高亮表示由策略控制（10 个关节目标，或 8 个关节加 2 个轮速），机械臂和夹爪锁定、只作为负载" width="100%" />
+</p>
+
 机械臂全程锁死在固定姿态（arm1~6 = 0 rad，gripper1/2 = 0.05 m），由资产 cfg 中独立的 `arm_lock` `ImplicitActuator` 组（stiffness 800、damping 40）执行 PD 锁位。
 
 - 机械臂关节**不在** `joint_order_name` 中 → 不进入 RL action 空间，不进入 observation 维度

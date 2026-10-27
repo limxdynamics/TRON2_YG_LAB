@@ -191,6 +191,10 @@ Every training task has a corresponding `-Play-v0` variant: SF/WF/SFYG/WFYG × F
 
 ### YG Variant Design
 
+<p align="center">
+  <img src="doc/yg_design_en.png" alt="SFYG and WFYG with the legs highlighted as policy-controlled (10 joint targets, or 8 joints plus 2 wheel velocities) and the arm and gripper shown as locked payload" width="100%" />
+</p>
+
 The arms remain locked in a fixed pose throughout (arm1~6 = 0 rad, gripper1/2 = 0.05 m), held by a dedicated `arm_lock` `ImplicitActuator` group (stiffness 800, damping 40) in the asset config performing PD lock.
 
 - Arm joints are **not** in `joint_order_name` → excluded from the RL action space and observation dimensions
