@@ -22,7 +22,7 @@
 
 Reinforcement learning training stack for the LimX **TRON2A** biped, built on [Isaac Lab](https://isaac-sim.github.io/IsaacLab/) with PPO. It trains blind locomotion policies for the **SF** (sole-foot) and **WF** (wheel-foot) bases, and for the **SFYG / WFYG** variants that carry a 6-DoF arm and a two-finger gripper. Built for the ATEC challenge.
 
-> **Scope:** blind (no perception) velocity tracking on flat and rough terrain (no stairs). In the YG variants the arm and gripper are locked and carried as payload; they are not controlled by the policy. Trained policies are not included: you train them here and export TorchScript / ONNX.
+> **Scope:** blind (no perception) velocity tracking on flat and rough terrain (no stairs). Trained policies are not included: you train them here and export TorchScript / ONNX.
 
 ## Highlights
 
@@ -73,6 +73,12 @@ python scripts/rsl_rl/train.py --task Isaac-Limx-SFYG-TRON2A-Blind-Rough-v0 --nu
 └── doc/                       # README images
 ```
 
+The three top-level directories:
+
+1. **`exts/bipedal_locomotion/`** — Isaac Lab extension. All env/asset/MDP/robot configs live here.
+2. **`rsl_rl/`** — Vendored fork. `scripts/rsl_rl/train.py` prepends this path to `sys.path`, overriding the system-installed version. Import uses `from rsl_rl.runner import OnPolicyRunner` (singular `runner`, not upstream's `runners`).
+3. **`scripts/rsl_rl/`** — Entry-point scripts. **Not a package**; operates via `sys.path` manipulation. CLI parsing order is fixed: launcher args must be registered before `AppLauncher(args_cli)`.
+
 ## Requirements
 
 - Isaac Sim **4.5.0** + Isaac Lab, with `isaaclab` / `isaaclab_tasks` / `isaaclab_rl` importable
@@ -119,9 +125,9 @@ Rough terrain configuration is defined in `BLIND_ROUGH_TERRAINS_CFG` in [cfg/SF_
 
 Common options:
 
-- `--checkpoint_path <path>` — resume from a specific `.pt` checkpoint (or set `resume=True` + `load_run`/`load_checkpoint` in cfg)
 - `--video --video_interval 24000 --video_length 400` — enable video recording (auto-enables `--enable_cameras`)
 - `--max_iterations N` — override the maximum iteration count in PPO cfg
+- `--resume True` with `--checkpoint_path` or `--load_run` / `--checkpoint` — continue a run, see [Resume Training](#resume-training)
 
 Log path: `logs/rsl_rl/<experiment_name>/<timestamp>_<run_name>/`
 
@@ -173,10 +179,8 @@ python scripts/rsl_rl/play.py \
 python scripts/rsl_rl/play.py \
     --task Isaac-Limx-SF-TRON2A-Blind-Rough-Play-v0 \
     --num_envs 32 \
-    --checkpoint_path logs/rsl_rl/sf_tron_2a_flat/<run>/model_<iter>.pt
+    --checkpoint_path logs/rsl_rl/sf_tron_2a_rough/<run>/model_<iter>.pt
 ```
-
-Every training task has a corresponding `-Play-v0` variant: SF/WF/SFYG/WFYG × Flat/Rough = 8 total.
 
 `play.py` also exports the loaded checkpoint to `exported/` next to it: TorchScript and ONNX (`policy.onnx`, `encoder.onnx`) for deployment.
 
@@ -194,17 +198,9 @@ The arms remain locked in a fixed pose throughout (arm1~6 = 0 rad, gripper1/2 = 
 
 For the full arm exclusion checklist, see [exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/limx_solefoot_yg_tron2a_env_cfg.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/limx_solefoot_yg_tron2a_env_cfg.py) and [limx_wheelfoot_yg_tron2a_env_cfg.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/limx_wheelfoot_yg_tron2a_env_cfg.py).
 
-## Architecture
+## Task wiring
 
-Three top-level packages:
-
-1. **`exts/bipedal_locomotion/`** — Isaac Lab extension. All env/asset/MDP/robot configs live here.
-2. **`rsl_rl/`** — Vendored fork. `scripts/rsl_rl/train.py` prepends this path to `sys.path`, overriding the system-installed version. Import uses `from rsl_rl.runner import OnPolicyRunner` (singular `runner`, not upstream's `runners`).
-3. **`scripts/rsl_rl/`** — Entry-point scripts. **Not a package**; operates via `sys.path` manipulation. CLI parsing order is fixed: launcher args must be registered before `AppLauncher(args_cli)`.
-
-### Task Wiring
-
-Using `Isaac-Limx-SF-TRON2A-Blind-Flat-v0` as an example:
+How a task ID is wired up, using `Isaac-Limx-SF-TRON2A-Blind-Flat-v0` as an example:
 
 1. **`gym.register`**: `tasks/locomotion/robots/__init__.py` binds (env_cfg, ppo_cfg) to the task ID
 2. **Env cfg**: `tasks/locomotion/robots/limx_solefoot_tron2a_env_cfg.py` inherits from `tasks/locomotion/cfg/SF_TRON2A/limx_base_env_cfg.py::SF_TRON2A_EnvCfg`, attaches assets + modifies MDP
@@ -224,11 +220,10 @@ The robot models come from [tron2-robot-description](https://github.com/limxdyna
 
 | Repository | Description |
 |---|---|
-| [tron2-robot-description](https://github.com/limxdynamics/tron2-robot-description) | TRON2 robot models (URDF / MJCF / USD) |
 | [tron2_rl_lab](https://github.com/limxdynamics/tron2_rl_lab) | Isaac Lab RL for SF / WF and the full-body dual-arm DASF_TRON2A |
 | [tron2_mujoco_sim](https://github.com/limxdynamics/tron2_mujoco_sim) | MuJoCo simulator for sim-to-sim checks |
 | [tron2_rl_deploy_python](https://github.com/limxdynamics/tron2_rl_deploy_python) · [tron2_rl_deploy_ros](https://github.com/limxdynamics/tron2_rl_deploy_ros) | Policy deployment in Python / ROS |
 
 ## License
 
-[Apache 2.0](LICENCE). If this project helps your work, a ⭐ helps others find it.
+[Apache 2.0](LICENCE).

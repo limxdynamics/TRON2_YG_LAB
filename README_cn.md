@@ -22,7 +22,7 @@
 
 基于 [Isaac Lab](https://isaac-sim.github.io/IsaacLab/) 的 LimX **TRON2A** 双足机器人强化学习训练栈，使用 PPO 训练盲走（无感知）运动策略。支持 **SF**（足板）和 **WF**（轮足）两种底座，以及带 6 自由度机械臂和双指夹爪的 **SFYG / WFYG** 形态。为 ATEC 挑战赛开发。
 
-> **适用范围：** 平地和起伏地形（不含楼梯）上的速度跟踪，不使用感知。YG 形态中机械臂和夹爪锁定，作为负载携带，不由策略控制。仓库不附带训练好的策略：在这里训练，再导出 TorchScript / ONNX 用于部署。
+> **适用范围：** 平地和起伏地形（不含楼梯）上的速度跟踪，不使用感知。仓库不附带训练好的策略：在这里训练，再导出 TorchScript / ONNX 用于部署。
 
 ## 亮点
 
@@ -73,6 +73,12 @@ python scripts/rsl_rl/train.py --task Isaac-Limx-SFYG-TRON2A-Blind-Rough-v0 --nu
 └── doc/                       # README 图片
 ```
 
+三个顶层目录：
+
+1. **`exts/bipedal_locomotion/`** — Isaac Lab extension。env / asset / MDP / robot cfg 全部在这里
+2. **`rsl_rl/`** — vendored fork。`scripts/rsl_rl/train.py` 在 `sys.path` 最前面插入此路径，覆盖系统装的版本；import 是 `from rsl_rl.runner import OnPolicyRunner`（单数 `runner`，不是 upstream 的 `runners`）
+3. **`scripts/rsl_rl/`** — 入口脚本。**不是包**，靠 `sys.path` 操作工作，CLI 解析顺序固定：launcher args 必须在 `AppLauncher(args_cli)` 之前注册
+
 ## 环境要求
 
 - Isaac Sim **4.5.0** + Isaac Lab，且 `isaaclab` / `isaaclab_tasks` / `isaaclab_rl` 可被 import
@@ -119,9 +125,9 @@ Rough 地形定义见 [cfg/SF_TRON2A/terrains_cfg.py](exts/bipedal_locomotion/bi
 
 常用选项：
 
-- `--checkpoint_path <path>` 从某 .pt 恢复（或在 cfg 中开 `resume=True` + `load_run` / `load_checkpoint`）
 - `--video --video_interval 24000 --video_length 400` 录像（自动启用 `--enable_cameras`）
 - `--max_iterations N` 覆盖 PPO cfg 中的最大迭代数
+- `--resume True` 加 `--checkpoint_path` 或 `--load_run` / `--checkpoint`：接着训练，见 [Resume 续训](#resume-续训)
 
 日志路径：`logs/rsl_rl/<experiment_name>/<timestamp>_<run_name>/`
 
@@ -173,10 +179,8 @@ python scripts/rsl_rl/play.py \
 python scripts/rsl_rl/play.py \
     --task Isaac-Limx-SF-TRON2A-Blind-Rough-Play-v0 \
     --num_envs 32 \
-    --checkpoint_path logs/rsl_rl/sf_tron_2a_flat/<run>/model_<iter>.pt
+    --checkpoint_path logs/rsl_rl/sf_tron_2a_rough/<run>/model_<iter>.pt
 ```
-
-每个训练 task 都有同名的 `-Play-v0` 变体，SF/WF/SFYG/WFYG × Flat/Rough 共 8 个。
 
 `play.py` 还会把加载的 checkpoint 导出到其旁边的 `exported/` 目录：TorchScript 和 ONNX（`policy.onnx`、`encoder.onnx`），用于部署。
 
@@ -194,17 +198,9 @@ python scripts/rsl_rl/play.py \
 
 机械臂排除清单的具体覆盖见 [exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/limx_solefoot_yg_tron2a_env_cfg.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/limx_solefoot_yg_tron2a_env_cfg.py) 与 [limx_wheelfoot_yg_tron2a_env_cfg.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/limx_wheelfoot_yg_tron2a_env_cfg.py)。
 
-## 架构
+## 任务 wiring
 
-三个顶层包：
-
-1. **`exts/bipedal_locomotion/`** — Isaac Lab extension。env / asset / MDP / robot cfg 全部在这里
-2. **`rsl_rl/`** — vendored fork。`scripts/rsl_rl/train.py` 在 `sys.path` 最前面插入此路径，覆盖系统装的版本；import 是 `from rsl_rl.runner import OnPolicyRunner`（单数 `runner`，不是 upstream 的 `runners`）
-3. **`scripts/rsl_rl/`** — 入口脚本。**不是包**，靠 `sys.path` 操作工作，CLI 解析顺序固定：launcher args 必须在 `AppLauncher(args_cli)` 之前注册
-
-### 任务 wiring
-
-以 `Isaac-Limx-SF-TRON2A-Blind-Flat-v0` 为例：
+一个任务 ID 是如何串起来的，以 `Isaac-Limx-SF-TRON2A-Blind-Flat-v0` 为例：
 
 1. **`gym.register`**：`tasks/locomotion/robots/__init__.py` 把 (env_cfg, ppo_cfg) 注册到 task id
 2. **Env cfg**：`tasks/locomotion/robots/limx_solefoot_tron2a_env_cfg.py` 继承 `tasks/locomotion/cfg/SF_TRON2A/limx_base_env_cfg.py::SF_TRON2A_EnvCfg`，挂资产 + 改 MDP
@@ -224,11 +220,10 @@ python scripts/rsl_rl/play.py \
 
 | 仓库 | 说明 |
 |---|---|
-| [tron2-robot-description](https://github.com/limxdynamics/tron2-robot-description) | TRON2 机器人模型（URDF / MJCF / USD） |
 | [tron2_rl_lab](https://github.com/limxdynamics/tron2_rl_lab) | 基于 Isaac Lab 的 SF / WF 及全身双臂 DASF_TRON2A 训练 |
 | [tron2_mujoco_sim](https://github.com/limxdynamics/tron2_mujoco_sim) | MuJoCo 仿真，用于 sim-to-sim 验证 |
 | [tron2_rl_deploy_python](https://github.com/limxdynamics/tron2_rl_deploy_python) · [tron2_rl_deploy_ros](https://github.com/limxdynamics/tron2_rl_deploy_ros) | Python / ROS 策略部署 |
 
 ## License
 
-[Apache 2.0](LICENCE)。如果这个项目对你有帮助，欢迎点个 ⭐，让更多人看到它。
+[Apache 2.0](LICENCE)。
