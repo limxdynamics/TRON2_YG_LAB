@@ -180,16 +180,7 @@ python scripts/rsl_rl/play.py \
 
 `play.py` 还会把加载的 checkpoint 导出到其旁边的 `exported/` 目录：TorchScript 和 ONNX（`policy.onnx`、`encoder.onnx`），用于部署。
 
-## 机器人形态
-
-| 形态 | 末端 | 机械臂 | task id 前缀 |
-|---|---|---|---|
-| SF_TRON2A | sole foot (ankle pitch) | — | `Isaac-Limx-SF-TRON2A-...` |
-| WF_TRON2A | wheel | — | `Isaac-Limx-WF-TRON2A-...` |
-| SFYG_TRON2A | sole foot | 6-DoF arm + 2-finger prismatic gripper（锁死） | `Isaac-Limx-SFYG-TRON2A-...` |
-| WFYG_TRON2A | wheel | 同上 | `Isaac-Limx-WFYG-TRON2A-...` |
-
-### YG 变体设计
+## YG 变体设计
 
 <p align="center">
   <img src="doc/yg_design_zh.png" alt="SFYG 与 WFYG：腿部高亮表示由策略控制（10 个关节目标，或 8 个关节加 2 个轮速），机械臂和夹爪锁定、只作为负载" width="100%" />

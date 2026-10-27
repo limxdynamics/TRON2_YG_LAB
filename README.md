@@ -180,16 +180,7 @@ Every training task has a corresponding `-Play-v0` variant: SF/WF/SFYG/WFYG × F
 
 `play.py` also exports the loaded checkpoint to `exported/` next to it: TorchScript and ONNX (`policy.onnx`, `encoder.onnx`) for deployment.
 
-## Robot morphologies
-
-| Morphology | End-effector | Arms | Task ID Prefix |
-|---|---|---|---|
-| SF_TRON2A | sole foot (ankle pitch) | — | `Isaac-Limx-SF-TRON2A-...` |
-| WF_TRON2A | wheel | — | `Isaac-Limx-WF-TRON2A-...` |
-| SFYG_TRON2A | sole foot | 6-DoF arm + 2-finger prismatic gripper (locked) | `Isaac-Limx-SFYG-TRON2A-...` |
-| WFYG_TRON2A | wheel | Same as above | `Isaac-Limx-WFYG-TRON2A-...` |
-
-### YG Variant Design
+## YG Variant Design
 
 <p align="center">
   <img src="doc/yg_design_en.png" alt="SFYG and WFYG with the legs highlighted as policy-controlled (10 joint targets, or 8 joints plus 2 wheel velocities) and the arm and gripper shown as locked payload" width="100%" />
