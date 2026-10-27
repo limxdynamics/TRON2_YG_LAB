@@ -67,34 +67,18 @@ python scripts/rsl_rl/train.py --task Isaac-Limx-SFYG-TRON2A-Blind-Rough-v0 --nu
 ```
 .
 ├── exts/bipedal_locomotion/   # Isaac Lab extension: env / asset / MDP / robot configs
-├── rsl_rl/                    # Vendored rsl_rl fork (PPO + on-policy runner + MLP encoder)
-├── scripts/rsl_rl/            # Entry points: train.py / play.py / cli_args.py
+├── rsl_rl/                    # Vendored rsl_rl fork (PPO, on-policy runner, MLP encoder); train.py puts it first on sys.path
+├── scripts/rsl_rl/            # Entry points train.py / play.py / cli_args.py (scripts, not a package)
 ├── robot_description/         # Git submodule: URDF / USD / MJCF / meshes for TRON2
 └── doc/                       # README images
 ```
 
-The three top-level directories:
-
-1. **`exts/bipedal_locomotion/`** — Isaac Lab extension. All env/asset/MDP/robot configs live here.
-2. **`rsl_rl/`** — Vendored fork. `scripts/rsl_rl/train.py` prepends this path to `sys.path`, overriding the system-installed version. Import uses `from rsl_rl.runner import OnPolicyRunner` (singular `runner`, not upstream's `runners`).
-3. **`scripts/rsl_rl/`** — Entry-point scripts. **Not a package**; operates via `sys.path` manipulation. CLI parsing order is fixed: launcher args must be registered before `AppLauncher(args_cli)`.
-
-## Requirements
-
-- Isaac Sim **4.5.0** + Isaac Lab, with `isaaclab` / `isaaclab_tasks` / `isaaclab_rl` importable
-- Python 3.10
-- NVIDIA GPU (≥ 12 GB VRAM recommended for 4096-environment training)
-
 ## Installation
 
-```bash
-# 1. Clone with submodules
-git clone --recurse-submodules https://github.com/limxdynamics/TRON2_YG_LAB.git
-cd TRON2_YG_LAB
-# Already cloned without submodules:
-git submodule update --init --recursive
+Requires Isaac Sim **4.5.0** + Isaac Lab (`isaaclab` / `isaaclab_tasks` / `isaaclab_rl` importable), Python 3.10 and an NVIDIA GPU (≥ 12 GB VRAM recommended for 4096 environments). Clone as in [Quick start](#quick-start), then:
 
-# 2. Editable install of the extension and the vendored rsl_rl
+```bash
+git submodule update --init --recursive   # only if cloned without --recurse-submodules
 pip install -e exts/bipedal_locomotion
 pip install -e rsl_rl
 ```
@@ -103,86 +87,43 @@ The USD files in the `robot_description` submodule are loaded when training or p
 
 ## Training
 
-Task IDs are registered in [exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/__init__.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/__init__.py).
-
-Each morphology has two terrain variants: **Flat** (pure flat plane) and **Rough** (procedurally generated rough terrain with four sub-terrain types: flat / waves / boxes / random_rough, **no stairs**).
-
 ```bash
-# === Flat ===
-python scripts/rsl_rl/train.py --task Isaac-Limx-SF-TRON2A-Blind-Flat-v0   --num_envs 4096 --headless
-python scripts/rsl_rl/train.py --task Isaac-Limx-WF-TRON2A-Blind-Flat-v0   --num_envs 4096 --headless --max_iterations 5000
-python scripts/rsl_rl/train.py --task Isaac-Limx-SFYG-TRON2A-Blind-Flat-v0 --num_envs 4096 --headless
-python scripts/rsl_rl/train.py --task Isaac-Limx-WFYG-TRON2A-Blind-Flat-v0 --num_envs 4096 --headless
-
-# === Rough (procedural terrain, no stairs) ===
-python scripts/rsl_rl/train.py --task Isaac-Limx-SF-TRON2A-Blind-Rough-v0   --num_envs 4096 --headless
-python scripts/rsl_rl/train.py --task Isaac-Limx-WF-TRON2A-Blind-Rough-v0   --num_envs 4096 --headless
-python scripts/rsl_rl/train.py --task Isaac-Limx-SFYG-TRON2A-Blind-Rough-v0 --num_envs 4096 --headless
-python scripts/rsl_rl/train.py --task Isaac-Limx-WFYG-TRON2A-Blind-Rough-v0 --num_envs 4096 --headless
+python scripts/rsl_rl/train.py --task <TASK> --num_envs 4096 --headless
 ```
 
-Rough terrain configuration is defined in `BLIND_ROUGH_TERRAINS_CFG` in [cfg/SF_TRON2A/terrains_cfg.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/SF_TRON2A/terrains_cfg.py) and [cfg/WF_TRON2A/terrains_cfg.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/WF_TRON2A/terrains_cfg.py) (10×16 grid, curriculum on, difficulty 0~1). YG variants reuse the SF/WF rough terrain but exclude arm/gripper randomization and limit penalties as described in [YG Variant Design](#yg-variant-design).
+`<TASK>` is `Isaac-Limx-{SF,WF,SFYG,WFYG}-TRON2A-Blind-{Flat,Rough}-v0`, registered in [robots/__init__.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/__init__.py). **Flat** is a plain plane; **Rough** uses `BLIND_ROUGH_TERRAINS_CFG` in [cfg/SF_TRON2A/terrains_cfg.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/SF_TRON2A/terrains_cfg.py) and [cfg/WF_TRON2A/terrains_cfg.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/WF_TRON2A/terrains_cfg.py), which YG variants reuse.
 
 Common options:
 
-- `--video --video_interval 24000 --video_length 400` — enable video recording (auto-enables `--enable_cameras`)
-- `--max_iterations N` — override the maximum iteration count in PPO cfg
-- `--resume True` with `--checkpoint_path` or `--load_run` / `--checkpoint` — continue a run, see [Resume Training](#resume-training)
+- `--video --video_interval 24000 --video_length 400` — record videos (auto-enables `--enable_cameras`)
+- `--max_iterations N` — override the maximum iteration count in the PPO cfg
 
-Log path: `logs/rsl_rl/<experiment_name>/<timestamp>_<run_name>/`
+Logs go to `logs/rsl_rl/<experiment_name>/<timestamp>_<run_name>/`.
 
-## Resume Training
+### Resume training
 
-`agent_cfg.resume` defaults to `False`. You **must explicitly pass `--resume True`** to load a checkpoint ([scripts/rsl_rl/train.py:130-139](scripts/rsl_rl/train.py#L130-L139)). Two methods:
-
-### Method A: Direct .pt path (recommended)
+Pass `--resume True` explicitly; `agent_cfg.resume` defaults to `False` ([train.py:130-139](scripts/rsl_rl/train.py#L130-L139)).
 
 ```bash
-python scripts/rsl_rl/train.py \
-    --task Isaac-Limx-SFYG-TRON2A-Blind-Rough-v0 \
-    --num_envs 4096 --headless \
-    --resume True \
+python scripts/rsl_rl/train.py --task <TASK> --num_envs 4096 --headless --resume True \
     --checkpoint_path logs/rsl_rl/<experiment_name>/<timestamp>_<run_name>/model_<iter>.pt
 ```
 
-### Method B: Look up by run name and checkpoint name
+Or replace `--checkpoint_path` with `--load_run <run_dir> --checkpoint <model_file>`; both accept regex (e.g. `--load_run ".*"`) and pick the latest match under `logs/rsl_rl/<experiment_name>/` in lexicographic order.
 
-```bash
-python scripts/rsl_rl/train.py \
-    --task Isaac-Limx-SFYG-TRON2A-Blind-Rough-v0 \
-    --num_envs 4096 --headless \
-    --resume True \
-    --load_run 2026-06-01_12-34-56_sfyg_rough \
-    --checkpoint model_1500.pt
-```
-
-`--load_run` / `--checkpoint` support regex (e.g., `--load_run ".*"`, `--checkpoint "model_.*\.pt"`), matching the latest entry under `logs/rsl_rl/<experiment_name>/` in lexicographic order.
-
-Notes:
-
-1. **The task ID must match the original run**, otherwise obs/action dimension mismatch will cause loading failure. Changing only reward weights (which do not affect dimensions) is safe for resuming.
-2. Resume creates a **new timestamped subdirectory** under `logs/rsl_rl/<experiment_name>/` for new logs, leaving the original run files untouched.
-3. To train for N additional iterations: `--max_iterations` is a **cap, not an increment** — if you trained to 1500 and want 1000 more, pass `--max_iterations 2500`.
+- Use the same task ID as the original run, or loading fails on obs/action dimensions; changing reward weights is fine. Logs go to a new timestamped directory.
+- `--max_iterations` is a cap, not an increment: trained to 1500 and want 1000 more → `--max_iterations 2500`.
 
 ## Play and export
 
-Use task IDs with the `-Play-v0` suffix. Play cfg uses fewer envs, disables domain randomization, and simplifies terrain.
+Use the `-Play-v0` task ID. Play cfg uses fewer envs, disables domain randomization and simplifies terrain.
 
 ```bash
-# Flat
-python scripts/rsl_rl/play.py \
-    --task Isaac-Limx-SF-TRON2A-Blind-Flat-Play-v0 \
-    --num_envs 32 \
-    --checkpoint_path logs/rsl_rl/sf_tron_2a_flat/<run>/model_<iter>.pt
-
-# Rough
-python scripts/rsl_rl/play.py \
-    --task Isaac-Limx-SF-TRON2A-Blind-Rough-Play-v0 \
-    --num_envs 32 \
+python scripts/rsl_rl/play.py --task Isaac-Limx-SF-TRON2A-Blind-Rough-Play-v0 --num_envs 32 \
     --checkpoint_path logs/rsl_rl/sf_tron_2a_rough/<run>/model_<iter>.pt
 ```
 
-`play.py` also exports the loaded checkpoint to `exported/` next to it: TorchScript and ONNX (`policy.onnx`, `encoder.onnx`) for deployment.
+`play.py` also writes TorchScript and ONNX (`policy.onnx`, `encoder.onnx`) to `exported/` next to the checkpoint.
 
 ## YG Variant Design
 
@@ -192,9 +133,8 @@ python scripts/rsl_rl/play.py \
 
 The arms remain locked in a fixed pose throughout (arm1~6 = 0 rad, gripper1/2 = 0.05 m), held by a dedicated `arm_lock` `ImplicitActuator` group (stiffness 800, damping 40) in the asset config performing PD lock.
 
-- Arm joints are **not** in `joint_order_name` → excluded from the RL action space and observation dimensions
-- Domain randomization / reset / dof_limits reward explicitly exclude arm joints in YG env cfg, preventing disturbance to the lock PD or spurious penalties
-- During training/inference, the arms serve as **payload only** and are invisible to the policy
+- Arm joints are **not** in `joint_order_name`, so the policy neither commands nor observes them: the arm is payload only.
+- Domain randomization, reset and the dof_limits reward exclude arm joints in the YG env cfg, so they neither disturb the lock PD nor add spurious penalties.
 
 For the full arm exclusion checklist, see [exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/limx_solefoot_yg_tron2a_env_cfg.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/limx_solefoot_yg_tron2a_env_cfg.py) and [limx_wheelfoot_yg_tron2a_env_cfg.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/limx_wheelfoot_yg_tron2a_env_cfg.py).
 

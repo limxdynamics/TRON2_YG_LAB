@@ -67,34 +67,18 @@ python scripts/rsl_rl/train.py --task Isaac-Limx-SFYG-TRON2A-Blind-Rough-v0 --nu
 ```
 .
 ├── exts/bipedal_locomotion/   # Isaac Lab extension：env / asset / MDP / robot 配置
-├── rsl_rl/                    # 项目内 vendored 的 rsl_rl fork（PPO + on-policy runner + MLP 编码器）
-├── scripts/rsl_rl/            # 入口：train.py / play.py / cli_args.py
+├── rsl_rl/                    # 项目内 vendored 的 rsl_rl fork（PPO、on-policy runner、MLP 编码器），train.py 会把它插到 sys.path 最前面
+├── scripts/rsl_rl/            # 入口脚本 train.py / play.py / cli_args.py（脚本，不是包）
 ├── robot_description/         # git 子模块：TRON2 的 URDF / USD / MJCF / 网格
 └── doc/                       # README 图片
 ```
 
-三个顶层目录：
-
-1. **`exts/bipedal_locomotion/`** — Isaac Lab extension。env / asset / MDP / robot cfg 全部在这里
-2. **`rsl_rl/`** — vendored fork。`scripts/rsl_rl/train.py` 在 `sys.path` 最前面插入此路径，覆盖系统装的版本；import 是 `from rsl_rl.runner import OnPolicyRunner`（单数 `runner`，不是 upstream 的 `runners`）
-3. **`scripts/rsl_rl/`** — 入口脚本。**不是包**，靠 `sys.path` 操作工作，CLI 解析顺序固定：launcher args 必须在 `AppLauncher(args_cli)` 之前注册
-
-## 环境要求
-
-- Isaac Sim **4.5.0** + Isaac Lab，且 `isaaclab` / `isaaclab_tasks` / `isaaclab_rl` 可被 import
-- Python 3.10
-- NVIDIA 显卡（4096 个环境并行训练建议 ≥ 12 GB 显存）
-
 ## 安装
 
-```bash
-# 1. 连同子模块一起 clone
-git clone --recurse-submodules https://github.com/limxdynamics/TRON2_YG_LAB.git
-cd TRON2_YG_LAB
-# 如果 clone 时没有拉子模块：
-git submodule update --init --recursive
+需要 Isaac Sim **4.5.0** + Isaac Lab（`isaaclab` / `isaaclab_tasks` / `isaaclab_rl` 可被 import）、Python 3.10 和 NVIDIA 显卡（4096 个环境并行训练建议 ≥ 12 GB 显存）。按[快速开始](#快速开始)clone 后执行：
 
-# 2. 以可编辑模式安装 extension 和 vendored 的 rsl_rl
+```bash
+git submodule update --init --recursive   # 仅当 clone 时没带 --recurse-submodules
 pip install -e exts/bipedal_locomotion
 pip install -e rsl_rl
 ```
@@ -103,86 +87,43 @@ pip install -e rsl_rl
 
 ## 训练
 
-任务 ID 均在 [exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/__init__.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/__init__.py) 中注册。
-
-每种形态都有 **Flat**（纯平面）和 **Rough**（程序生成 rough 地形，含 flat / waves / boxes / random_rough 四类子地形，**不含楼梯**）两个变体。
-
 ```bash
-# === Flat ===
-python scripts/rsl_rl/train.py --task Isaac-Limx-SF-TRON2A-Blind-Flat-v0   --num_envs 4096 --headless
-python scripts/rsl_rl/train.py --task Isaac-Limx-WF-TRON2A-Blind-Flat-v0   --num_envs 4096 --headless --max_iterations 5000
-python scripts/rsl_rl/train.py --task Isaac-Limx-SFYG-TRON2A-Blind-Flat-v0 --num_envs 4096 --headless
-python scripts/rsl_rl/train.py --task Isaac-Limx-WFYG-TRON2A-Blind-Flat-v0 --num_envs 4096 --headless
-
-# === Rough（程序生成地形，无楼梯）===
-python scripts/rsl_rl/train.py --task Isaac-Limx-SF-TRON2A-Blind-Rough-v0   --num_envs 4096 --headless
-python scripts/rsl_rl/train.py --task Isaac-Limx-WF-TRON2A-Blind-Rough-v0   --num_envs 4096 --headless
-python scripts/rsl_rl/train.py --task Isaac-Limx-SFYG-TRON2A-Blind-Rough-v0 --num_envs 4096 --headless
-python scripts/rsl_rl/train.py --task Isaac-Limx-WFYG-TRON2A-Blind-Rough-v0 --num_envs 4096 --headless
+python scripts/rsl_rl/train.py --task <TASK> --num_envs 4096 --headless
 ```
 
-Rough 地形定义见 [cfg/SF_TRON2A/terrains_cfg.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/SF_TRON2A/terrains_cfg.py) / [cfg/WF_TRON2A/terrains_cfg.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/WF_TRON2A/terrains_cfg.py) 中的 `BLIND_ROUGH_TERRAINS_CFG`（10×16 网格、curriculum on、难度 0~1）。YG 变体复用 SF / WF 的 rough 地形，但仍按 [YG 变体设计](#yg-变体设计) 屏蔽 arm/gripper 的随机化与限位惩罚。
+`<TASK>` 为 `Isaac-Limx-{SF,WF,SFYG,WFYG}-TRON2A-Blind-{Flat,Rough}-v0`，在 [robots/__init__.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/__init__.py) 中注册。**Flat** 是纯平面；**Rough** 使用 [cfg/SF_TRON2A/terrains_cfg.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/SF_TRON2A/terrains_cfg.py) / [cfg/WF_TRON2A/terrains_cfg.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/cfg/WF_TRON2A/terrains_cfg.py) 中的 `BLIND_ROUGH_TERRAINS_CFG`，YG 变体复用同一份地形。
 
 常用选项：
 
 - `--video --video_interval 24000 --video_length 400` 录像（自动启用 `--enable_cameras`）
 - `--max_iterations N` 覆盖 PPO cfg 中的最大迭代数
-- `--resume True` 加 `--checkpoint_path` 或 `--load_run` / `--checkpoint`：接着训练，见 [Resume 续训](#resume-续训)
 
 日志路径：`logs/rsl_rl/<experiment_name>/<timestamp>_<run_name>/`
 
-## Resume 续训
+### Resume 续训
 
-`agent_cfg.resume` 默认 `False`，**必须显式带 `--resume True`** 才会加载 checkpoint（[scripts/rsl_rl/train.py:130-139](scripts/rsl_rl/train.py#L130-L139)）。两种方式：
-
-### 方式 A：直接给 .pt 路径（推荐）
+必须显式带 `--resume True`，`agent_cfg.resume` 默认是 `False`（[train.py:130-139](scripts/rsl_rl/train.py#L130-L139)）。
 
 ```bash
-python scripts/rsl_rl/train.py \
-    --task Isaac-Limx-SFYG-TRON2A-Blind-Rough-v0 \
-    --num_envs 4096 --headless \
-    --resume True \
+python scripts/rsl_rl/train.py --task <TASK> --num_envs 4096 --headless --resume True \
     --checkpoint_path logs/rsl_rl/<experiment_name>/<timestamp>_<run_name>/model_<iter>.pt
 ```
 
-### 方式 B：按 run 名 + checkpoint 名查找
+也可以把 `--checkpoint_path` 换成 `--load_run <run 目录> --checkpoint <模型文件>`，两者都支持正则（如 `--load_run ".*"`），在 `logs/rsl_rl/<experiment_name>/` 下按字典序取最新匹配。
 
-```bash
-python scripts/rsl_rl/train.py \
-    --task Isaac-Limx-SFYG-TRON2A-Blind-Rough-v0 \
-    --num_envs 4096 --headless \
-    --resume True \
-    --load_run 2026-06-01_12-34-56_sfyg_rough \
-    --checkpoint model_1500.pt
-```
-
-`--load_run` / `--checkpoint` 支持正则（如 `--load_run ".*"`、`--checkpoint "model_.*\.pt"`），在 `logs/rsl_rl/<experiment_name>/` 下按字典序取最新匹配。
-
-注意事项：
-
-1. **task ID 必须与原 run 一致**，否则 obs/action 维度对不上 load 会失败。只改奖励权重之类**不影响维度**的可以续跑。
-2. resume 会在 `logs/rsl_rl/<experiment_name>/` 下**新建一个 timestamp 子目录**写新 log，不覆盖原 run 文件。
-3. 想再训 N 个 iter：`--max_iterations` 是**上限不是增量**——原来训到 1500、想再训 1000，传 `--max_iterations 2500`。
+- task ID 必须与原 run 一致，否则 obs/action 维度对不上会加载失败；只改奖励权重可以续跑。新日志写到新的 timestamp 目录。
+- `--max_iterations` 是上限不是增量：训到 1500、想再训 1000，传 `--max_iterations 2500`。
 
 ## Play 与导出
 
 用 `-Play-v0` 后缀的任务 ID。Play cfg 使用更少 env、关闭域随机化、简化地形。
 
 ```bash
-# Flat
-python scripts/rsl_rl/play.py \
-    --task Isaac-Limx-SF-TRON2A-Blind-Flat-Play-v0 \
-    --num_envs 32 \
-    --checkpoint_path logs/rsl_rl/sf_tron_2a_flat/<run>/model_<iter>.pt
-
-# Rough
-python scripts/rsl_rl/play.py \
-    --task Isaac-Limx-SF-TRON2A-Blind-Rough-Play-v0 \
-    --num_envs 32 \
+python scripts/rsl_rl/play.py --task Isaac-Limx-SF-TRON2A-Blind-Rough-Play-v0 --num_envs 32 \
     --checkpoint_path logs/rsl_rl/sf_tron_2a_rough/<run>/model_<iter>.pt
 ```
 
-`play.py` 还会把加载的 checkpoint 导出到其旁边的 `exported/` 目录：TorchScript 和 ONNX（`policy.onnx`、`encoder.onnx`），用于部署。
+`play.py` 还会把 TorchScript 和 ONNX（`policy.onnx`、`encoder.onnx`）导出到 checkpoint 旁边的 `exported/` 目录。
 
 ## YG 变体设计
 
@@ -192,9 +133,8 @@ python scripts/rsl_rl/play.py \
 
 机械臂全程锁死在固定姿态（arm1~6 = 0 rad，gripper1/2 = 0.05 m），由资产 cfg 中独立的 `arm_lock` `ImplicitActuator` 组（stiffness 800、damping 40）执行 PD 锁位。
 
-- 机械臂关节**不在** `joint_order_name` 中 → 不进入 RL action 空间，不进入 observation 维度
-- 域随机化 / reset / dof_limits reward 在 YG env cfg 中均显式排除机械臂，避免扰动锁位 PD 或注入伪 penalty
-- 训练 / 推理时机械臂作为「负载」存在，对策略不可见
+- 机械臂关节**不在** `joint_order_name` 中，策略既不控制也观测不到它们，机械臂只是负载。
+- 域随机化、reset 和 dof_limits reward 在 YG env cfg 中均排除机械臂，不会扰动锁位 PD，也不会产生多余惩罚。
 
 机械臂排除清单的具体覆盖见 [exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/limx_solefoot_yg_tron2a_env_cfg.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/limx_solefoot_yg_tron2a_env_cfg.py) 与 [limx_wheelfoot_yg_tron2a_env_cfg.py](exts/bipedal_locomotion/bipedal_locomotion/tasks/locomotion/robots/limx_wheelfoot_yg_tron2a_env_cfg.py)。
 
