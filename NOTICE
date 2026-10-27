@@ -7,6 +7,6 @@ This product includes software developed by LimX Dynamics
 The following components are bundled as Git submodules. They are
 first-party components maintained by LimX Dynamics and are
 distributed under the Apache License 2.0:
-  - robot_description  (limx-tron2/robot-description)
+  - robot_description  (limxdynamics/tron2-robot-description)
 
 No third-party notices are required.
