@@ -20,6 +20,8 @@
 
 # TRON2_YG_LAB
 
+> **TRON2 开源生态的一部分。** 上手路线和其他 TRON2 仓库：[TRON2 快速上手](https://github.com/limxdynamics/limxdynamics/blob/main/doc/quickstart_cn.md#tron2)。
+
 基于 [Isaac Lab](https://isaac-sim.github.io/IsaacLab/) 的 LimX **TRON2A** 双足机器人强化学习训练栈，使用 PPO 训练盲走（无感知）运动策略。支持 **SF**（足板）和 **WF**（轮足）两种底座，以及带 6 自由度机械臂和双指夹爪的 **SFYG / WFYG** 形态。为 ATEC 挑战赛开发。
 
 > **适用范围：** 平地和起伏地形（不含楼梯）上的速度跟踪，不使用感知。仓库不附带训练好的策略：在这里训练，再导出 TorchScript / ONNX 用于部署。

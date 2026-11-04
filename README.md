@@ -20,6 +20,8 @@
 
 # TRON2_YG_LAB
 
+> **Part of the TRON2 open-source ecosystem.** Where to start and the other TRON2 repositories: [TRON2 quick start](https://github.com/limxdynamics/limxdynamics/blob/main/doc/quickstart.md#tron2).
+
 Reinforcement learning training stack for the LimX **TRON2A** biped, built on [Isaac Lab](https://isaac-sim.github.io/IsaacLab/) with PPO. It trains blind locomotion policies for the **SF** (sole-foot) and **WF** (wheel-foot) bases, and for the **SFYG / WFYG** variants that carry a 6-DoF arm and a two-finger gripper. Built for the ATEC challenge.
 
 > **Scope:** blind (no perception) velocity tracking on flat and rough terrain (no stairs). Trained policies are not included: you train them here and export TorchScript / ONNX.
